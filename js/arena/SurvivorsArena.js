@@ -49,9 +49,98 @@ class SurvivorsArena {
 
         // Для глобального доступа
         window.currentArena = this;
+// Генерация декораций (деревья, камни и т.д.)
+this.generateDecorations();
 
+// Инициализация управления (клавиатура, джойстик)
+this.initControls();
+
+// Обработчик изменения размера окна
+this.initResizeHandler();
+
+// Обработчик поворота экрана на мобильных устройствах
+this.initOrientationHandler();
+
+// Наблюдатель за изменениями DOM (для правильного ресайза)
+this.initMutationObserver();
         this.initControls();
     }
+    resizeCanvas() {
+        const container = this.canvas.parentElement;
+        if (!container) return;
+
+        // Получаем размеры контейнера
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
+
+        if (containerWidth > 0 && containerHeight > 0) {
+            // Сохраняем старые размеры для проверки
+            const oldWidth = this.screenWidth;
+            const oldHeight = this.screenHeight;
+            
+            this.screenWidth = containerWidth;
+            this.screenHeight = containerHeight;
+            this.canvas.width = containerWidth;
+            this.canvas.height = containerHeight;
+
+            console.log('Canvas resized from', oldWidth, 'x', oldHeight, 'to', this.screenWidth, 'x', this.screenHeight);
+
+            // Если герой уже существует, обновляем камеру сразу
+            if (this.hero) {
+                this.updateCamera();
+            }
+        }
+    }
+     initResizeHandler() {
+        // Используем throttle для оптимизации
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (this.isRunning) {
+                    this.resizeCanvas();
+                }
+            }, 100);
+        });
+    }
+
+     initResizeHandler() {
+        // Используем throttle для оптимизации
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (this.isRunning) {
+                    this.resizeCanvas();
+                }
+            }, 100);
+        });
+    }
+
+    // Наблюдатель за изменениями DOM
+initMutationObserver() {
+    // MutationObserver следит за изменениями в DOM-дереве
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            // Если изменился класс у экрана арены (стал активным)
+            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                const screenArena = document.getElementById('screenArena');
+                if (screenArena && screenArena.classList.contains('active') && this.isRunning) {
+                    // Когда экран арены становится видимым, пересчитываем размеры
+                    setTimeout(() => {
+                        this.resizeCanvas();
+                    }, 50);
+                }
+            }
+        });
+    });
+
+    const screenArena = document.getElementById('screenArena');
+    if (screenArena) {
+        // Начинаем следить за изменениями атрибута class
+        observer.observe(screenArena, { attributes: true });
+    }
+}
 
     generateDecorations() {
         // Создаём декорации по всему миру
@@ -259,8 +348,38 @@ class SurvivorsArena {
 
         const minutes = Math.floor(this.gameTime / 60);
         const seconds = Math.floor(this.gameTime % 60);
+        // Обновляем слоты навыков
+this.updateSkillSlots();
         document.getElementById('arenaTimer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
+    // Обновление слотов навыков на панели арены
+updateSkillSlots() {
+    const skillSlots = document.querySelectorAll('.skill-slot');
+    if (!skillSlots.length || !this.hero || !this.hero.heroData) return;
+
+    const learnedSkills = this.hero.heroData.learnedSkills || [];
+
+    // Очищаем все слоты
+    skillSlots.forEach(slot => {
+        slot.innerHTML = '';
+        slot.classList.remove('active');
+    });
+
+    // Если нет навыков, ничего не делаем
+    if (learnedSkills.length === 0) return;
+
+    // Заполняем слоты иконками изученных навыков
+    learnedSkills.forEach((skillId, index) => {
+        if (index < skillSlots.length) {
+            const skill = window.GameState.skillManager?.skills.find(s => s.id === skillId);
+            if (skill) {
+                skillSlots[index].innerHTML = skill.icon;
+                skillSlots[index].classList.add('active');
+                skillSlots[index].title = skill.name; // Всплывающая подсказка
+            }
+        }
+    });
+}
     draw() {
         // Очищаем канвас
         this.ctx.clearRect(0, 0, this.screenWidth, this.screenHeight);

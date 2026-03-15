@@ -1,63 +1,78 @@
-// ==============================
-// Контроллер арены (связывает с основной игрой)
-// ==============================
 class ArenaController {
     constructor() {
-        // Создаём менеджер спрайтов
-        window.spriteManager = new SpriteManager();
+        // РЎРѕР·РґР°С‘Рј РјРµРЅРµРґР¶РµСЂ СЃРїСЂР°Р№С‚РѕРІ
+        if (!window.spriteManager) {
+            window.spriteManager = new SpriteManager();
+        }
         this.arena = null;
         this.initEventListeners();
     }
-
+    
     initEventListeners() {
-        document.getElementById('pauseBtn').addEventListener('click', () => {
-            if (this.arena) {
-                this.arena.togglePause();
-            }
-        });
-
-        document.getElementById('resumeBtn').addEventListener('click', () => {
-            if (this.arena) {
-                this.arena.togglePause();
-            }
-        });
-
-        document.getElementById('exitArenaBtn').addEventListener('click', () => {
-            if (this.arena) {
-                this.arena.exitArena();
-            }
-        });
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resumeBtn = document.getElementById('resumeBtn');
+        const exitBtn = document.getElementById('exitArenaBtn');
+        
+        if (pauseBtn) {
+            pauseBtn.addEventListener('click', () => {
+                if (this.arena) {
+                    this.arena.togglePause();
+                }
+            });
+        }
+        
+        if (resumeBtn) {
+            resumeBtn.addEventListener('click', () => {
+                if (this.arena) {
+                    this.arena.togglePause();
+                }
+            });
+        }
+        
+        if (exitBtn) {
+            exitBtn.addEventListener('click', () => {
+                if (this.arena) {
+                    this.arena.exitArena();
+                }
+            });
+        }
     }
-
-    /**
-     * Начинает вылазку на арену
-     * @param {string} location - Название локации
-     * @param {Object} hero - Герой
-     * @returns {boolean} - Успешно ли началась вылазка
-     */
+    
     startExpedition(location, hero) {
         if (!hero) {
-            alert('Сначала выберите героя в меню "Герои"!');
+            alert('РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ РіРµСЂРѕСЏ РІ РјРµРЅСЋ "Р“РµСЂРѕРё"!');
             return false;
         }
-
-        // Сохраняем текущее состояние героя
+        
+        console.log('Starting expedition with hero:', hero);
+        
+        // РЎРѕС…СЂР°РЅСЏРµРј С‚РµРєСѓС‰РµРµ СЃРѕСЃС‚РѕСЏРЅРёРµ РіРµСЂРѕСЏ
         hero.currentStats.hp = hero.baseStats.hp;
-
-        // Создаём арену
+        
+        // РЎРѕР·РґР°С‘Рј Р°СЂРµРЅСѓ
         this.arena = new SurvivorsArena('gameCanvas');
         this.arena.init(hero);
-
-        // Переключаем экран
+        
+        // РџРµСЂРµРєР»СЋС‡Р°РµРј СЌРєСЂР°РЅ
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.getElementById('screenArena').classList.add('active');
-
-        // Скрываем навигацию
+        
+        // РЎРєСЂС‹РІР°РµРј РЅР°РІРёРіР°С†РёСЋ
         document.querySelector('.game-nav').style.display = 'none';
-
-        // Запускаем арену
-        this.arena.start();
-
+        
+        // РџСЂРёРЅСѓРґРёС‚РµР»СЊРЅРѕ СЃРєСЂС‹РІР°РµРј РѕСЃРЅРѕРІРЅРѕР№ С…РµРґРµСЂ
+        const gameHeader = document.querySelector('.game-header');
+        if (gameHeader) {
+            gameHeader.style.display = 'none';
+            gameHeader.style.visibility = 'hidden';
+        }
+        
+        // Р”Р°РµРј РІСЂРµРјСЏ РЅР° РїРµСЂРµСЂРёСЃРѕРІРєСѓ DOM
+        setTimeout(() => {
+            // Р—Р°РїСѓСЃРєР°РµРј Р°СЂРµРЅСѓ
+            this.arena.start();
+        }, 100);
+        
         return true;
     }
 }
