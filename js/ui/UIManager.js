@@ -31,6 +31,22 @@ class UIManager {
             this.renderCraft();
         }
     }
+    const closeModal = document.querySelector('.close-modal');
+if (closeModal) {
+    closeModal.addEventListener('click', () => {
+        document.getElementById('heroModal').style.display = 'none';
+
+        // Если мы на арене и есть ожидающий навык, сбрасываем его
+        if (window.currentArena && window.currentArena.hero && window.currentArena.hero.heroData) {
+            const hero = window.currentArena.hero.heroData;
+            if (hero.pendingSkillLevel > 0) {
+                hero.pendingSkillLevel = 0;
+                window.currentArena.skillChoiceShown = false;
+                window.currentArena.resume();
+            }
+        }
+    });
+}
     
     // инициализация слушателей
     initEventListeners() {
@@ -78,12 +94,181 @@ class UIManager {
         }
     });
     }
+    // Показать окно выбора навыка (вызывается, когда герой достигает 3,6,9... уровня)
+showSkillChoice(hero, skills) {
+    console.log('showSkillChoice вызван с навыками:', skills);
+    const modal = document.getElementById('heroModal');
+    const modalBody = document.getElementById('modalBody');
+
+    // Проверяем, есть ли модальное окно
+    if (!modal || !modalBody) {
+        console.error('Модальное окно не найдено!');
+        if (window.currentArena) {
+            window.currentArena.skillChoiceShown = false;
+            window.currentArena.resume();
+        }
+        return;
+    }
+
+    // Если нет доступных навыков, просто продолжаем игру
+    if (!skills || skills.length === 0) {
+        console.log('Нет доступных навыков, продолжаем игру');
+        hero.pendingSkillLevel = 0;
+        if (window.currentArena) {
+            window.currentArena.skillChoiceShown = false;
+            window.currentArena.resume();
+        }
+        return;
+    }
+
+    // Создаём HTML для модального окна с 3 навыками
+    modalBody.innerHTML = `
+        <h2 style="color: #e94560; text-align: center; margin-bottom: 20px;">Выберите навык для ${hero.name} (Уровень ${hero.pendingSkillLevel})</h2>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 20px;">
+            ${skills.map(skill => `
+                <div class="skill-choice-card" data-skill-id="${skill.id}" style="background: #16213e; padding: 15px; border-radius: 10px; text-align: center; cursor: pointer; border: 2px solid #0f3460; transition: all 0.3s;">
+                    <div style="font-size: 3rem; margin-bottom: 10px;">${skill.icon}</div>
+                    <h3 style="color: #e94560; margin: 10px 0; font-size: 1.1rem;">${skill.name}</h3>
+                    <p style="font-size: 0.9rem; margin-bottom: 10px; color: #aaa;">${skill.description}</p>
+                    <div style="background: #0f0f1f; padding: 8px; border-radius: 5px; font-size: 0.8rem; color: #4aff4a;">
+                        ${Object.entries(skill.effects).map(([key, value]) => {
+                            // Преобразуем эффекты навыка в читаемый текст
+                            if (key === 'special') {
+                                if (value.type === 'block') return `🛡️ Блок: ${Math.round(value.chance * 100)}%`;
+                                if (value.type === 'doubleStrike') return `⚡ Двойной удар: ${Math.round(value.chance * 100)}%`;
+                                if (value.type === 'accuracy') return `🎯 Точность: +${Math.round(value.bonus * 100)}%`;
+                                if (value.type === 'armorPierce') return `🏹 Игнор брони: ${Math.round(value.percent * 100)}%`;
+                                if (value.type === 'attackSpeed') return `⚡ Скорость атаки: +${Math.round(value.bonus * 100)}%`;
+                                if (value.type === 'poison') return `☠️ Яд: ${value.damage} урона/${value.duration}с`;
+                                if (value.type === 'slow') return `❄️ Замедление: ${Math.round(value.percent * 100)}%`;
+                                return '';
+                            }
+                            if (key === 'attack') return `⚔️ Атака +${value}`;
+                            if (key === 'defense') return `🛡️ Защита +${value}`;
+                            if (key === 'hp') return `❤️ Здоровье +${value}`;
+                            if (key === 'speed') return `👟 Скорость +${value}`;
+                            if (key === 'critChance') return `⭐ Крит. шанс +${Math.round(value * 100)}%`;
+                            if (key === 'critDamage') return `💥 Крит. урон +${Math.round((value - 1.5) * 100)}%`;
+                            if (key === 'lifesteal') return `💉 Вампиризм +${Math.round(value * 100)}%`;
+                            return '';
+                        }).filter(Boolean).join('<br>')}
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+        <p style="text-align: center; margin-top: 20px; color: #888; font-size: 0.9rem;">Нажмите на навык, чтобы изучить его</p>
+    `;
+
+    modal.style.display = 'block';
+    console.log('Модальное окно отображено');
+
+    // Добавляем обработчики для карточек навыков
+    this.setupSkillChoiceCards(hero, modal);
+}
+// Настройка обработчиков для карточек навыков
+setupSkillChoiceCards(hero, modal) {
+    const cards = document.querySelectorAll('.skill-choice-card');
+    
+    cards.forEach(card => {
+        // Эффект при наведении
+        card.addEventListener('mouseover', () => {
+            card.style.borderColor = '#e94560';
+            card.style.transform = 'scale(1.02)';
+            card.style.boxShadow = '0 0 15px rgba(233,69,96,0.5)';
+        });
+        
+        card.addEventListener('mouseout', () => {
+            card.style.borderColor = '#0f3460';
+            card.style.transform = 'scale(1)';
+            card.style.boxShadow = 'none';
+        });
+
+        // Обработчик клика на навык
+        card.addEventListener('click', () => {
+            const skillId = card.dataset.skillId;
+            const skill = window.GameState.skillManager?.skills.find(s => s.id === skillId);
+
+            if (skill) {
+                console.log('Выбран навык:', skill.name);
+
+                // Изучаем навык
+                const success = window.GameState.skillManager.learnSkill(hero, skillId);
+
+                if (success) {
+                    hero.pendingSkillLevel = 0; // Сбрасываем ожидание
+                    modal.style.display = 'none'; // Закрываем окно
+
+                    // Обновляем слоты навыков на арене
+                    if (window.currentArena) {
+                        window.currentArena.updateSkillSlots();
+                    }
+
+                    this.showNotification(`✨ Герой изучил навык: ${skill.name}`);
+                    this.renderHeroes(); // Обновляем отображение героев
+
+                    // Возобновляем игру
+                    if (window.currentArena) {
+                        window.currentArena.skillChoiceShown = false;
+                        window.currentArena.resume();
+                    }
+                } else {
+                    this.showNotification('❌ Не удалось изучить навык', 'error');
+                }
+            }
+        });
+    });
+
+    // Обработчик для кнопки закрытия окна
+    const closeModal = document.querySelector('.close-modal');
+    if (closeModal) {
+        closeModal.addEventListener('click', () => {
+            console.log('Модальное окно закрыто без выбора');
+            hero.pendingSkillLevel = 0;
+            modal.style.display = 'none';
+            if (window.currentArena) {
+                window.currentArena.skillChoiceShown = false;
+                window.currentArena.resume();
+            }
+        });
+    }
+}
+// Показать всплывающее уведомление
+showNotification(message, type = 'success') {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: ${type === 'success' ? '#4aff4a' : '#e94560'};
+        color: ${type === 'success' ? '#000' : '#fff'};
+        padding: 10px 20px;
+        border-radius: 5px;
+        z-index: 10000;
+        font-weight: bold;
+        animation: fadeInOut 2000ms;
+    `;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    // Удаляем через 2 секунды
+    setTimeout(() => notification.remove(), 2000);
+}
     
     updateResourcesUI() {
         this.resourceElements.proviziya.textContent = window.GameState.resources.proviziya;
         this.resourceElements.toplivo.textContent = window.GameState.resources.toplivo;
         this.resourceElements.instrumenty.textContent = window.GameState.resources.instrumenty;
     }
+    // Получить путь к аватарке героя (для тега <img>)
+getHeroAvatarUrl(hero) {
+    // Если есть SpriteManager, используем его
+    if (window.spriteManager) {
+        return window.spriteManager.getAvatarUrl(hero.type, hero.name);
+    }
+    // Запасной вариант - прямой путь к папке
+    return `images/heroes/${hero.type}.png?t=${Date.now()}`;
+}
 
     renderHeroes() {
         const container = document.getElementById('heroesList');
@@ -122,7 +307,65 @@ class UIManager {
         // Добавляем обработчики
         this.attachHeroButtonListeners();
     }
+// Отрисовка списка героев в меню
+renderHeroes() {
+    const container = document.getElementById('heroesList');
+    if (!container) return;
 
+    container.innerHTML = '';
+
+    // Перебираем всех героев
+    window.GameState.heroes.forEach(hero => {
+        const heroCard = document.createElement('div');
+        heroCard.className = 'hero-card';
+        
+        // Если это текущий выбранный герой, выделяем его рамкой
+        if (hero.id === window.GameState.currentHeroId) {
+            heroCard.style.border = '2px solid #e94560';
+        }
+
+        // Получаем URL аватара
+        const avatarUrl = this.getHeroAvatarUrl(hero);
+
+        // Создаём HTML карточки героя
+        heroCard.innerHTML = `
+            <div class="hero-avatar" style="position: relative;">
+                <!-- Аватарка героя - теперь это реальная картинка! -->
+                <img src="${avatarUrl}" 
+                     alt="${hero.name}" 
+                     style="width: 100px; height: 100px; border-radius: 50%; border: 3px solid #e94560; background: #16213e; object-fit: cover;"
+                     onerror="this.onerror=null; this.src='images/default_hero.png';">
+            </div>
+            <h3>${hero.name} (Ур. ${hero.level})</h3>
+            <div class="hero-stats">
+                <p>❤️ HP: ${hero.currentStats.hp}</p>
+                <p>⚔️ Атака: ${hero.currentStats.attack}</p>
+                <p>🛡️ Защита: ${hero.currentStats.defense}</p>
+            </div>
+            <div class="hero-exp">
+                <progress value="${hero.exp}" max="${hero.expToNextLevel}"></progress>
+                <p>${hero.exp}/${hero.expToNextLevel} опыта</p>
+            </div>
+            <div class="hero-skills">
+                <p>🎯 Уровень: ${hero.level}</p>
+                <!-- Отображение изученных навыков в виде иконок -->
+                <div class="learned-skills" style="display: flex; gap: 5px; margin-top: 5px; justify-content: center;">
+                    ${hero.learnedSkills.map(skillId => {
+                        const skill = window.GameState.skillManager?.skills.find(s => s.id === skillId);
+                        return skill ? `<span title="${skill.name}" style="font-size: 1.5rem;">${skill.icon}</span>` : '';
+                    }).join('')}
+                </div>
+            </div>
+            <button class="select-hero-btn" data-hero-id="${hero.id}">Выбрать для боя</button>
+            <button class="inventory-hero-btn" data-hero-id="${hero.id}">Инвентарь</button>
+        `;
+
+        container.appendChild(heroCard);
+    });
+
+    // Добавляем обработчики для кнопок
+    this.addHeroEventListeners();
+}
     attachHeroButtonListeners() {
         // Добавляем обработчики для кнопок выбора героя
         document.querySelectorAll('.select-hero-btn').forEach(btn => {
@@ -132,6 +375,7 @@ class UIManager {
                 this.renderHeroes(); // Перерисовываем для обновления выделения
             });
         });
+        
 
         // Обработчики для просмотра инвентаря
         document.querySelectorAll('.inventory-hero-btn').forEach(btn => {
@@ -141,6 +385,25 @@ class UIManager {
             });
         });
     }
+    // Обработчики для кнопок в карточках героев
+addHeroEventListeners() {
+    // Кнопка "Выбрать для боя"
+    document.querySelectorAll('.select-hero-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const heroId = e.target.dataset.heroId;
+            window.GameState.selectHero(heroId);
+            this.renderHeroes(); // Перерисовываем, чтобы обновить выделение
+        });
+    });
+
+    // Кнопка "Инвентарь"
+    document.querySelectorAll('.inventory-hero-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const heroId = e.target.dataset.heroId;
+            this.showHeroInventory(heroId);
+        });
+    });
+}
 
 showHeroInventory(heroId) {
     const hero = window.GameState.heroes.find(h => h.id === heroId);
@@ -394,6 +657,56 @@ showHeroInventory(heroId) {
         }, 1000);
     }
 }
+showEquipMenu(hero, item) {
+        const validSlots = hero.getValidSlotsForItem(item);
+        const modal = document.getElementById('heroModal');
+        const modalBody = document.getElementById('modalBody');
+
+        if (validSlots.length === 0) {
+            alert('Этот предмет нельзя экипировать данному герою');
+            return;
+        }
+
+        modalBody.innerHTML = `
+            <h2 style="color: #e94560; margin-bottom: 20px;">Экипировка предмета</h2>
+            <div style="text-align: center; margin: 20px 0;">
+                <div style="font-size: 4rem;">${item.icon || '📦'}</div>
+                <h3 style="color: #fff; margin: 10px 0;">${item.name}</h3>
+                <p style="color: #aaa;">${item.description || ''}</p>
+            </div>
+            
+            <h3 style="color: #4aff4a; margin-bottom: 10px;">Выберите слот для экипировки:</h3>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 20px 0;">
+                ${validSlots.map(slot => `
+                    <button class="equip-slot-btn" data-slot="${slot}" style="background: #16213e; padding: 15px; border: 2px solid #0f3460; color: white; cursor: pointer; border-radius: 5px;">
+                        ${slot.charAt(0).toUpperCase() + slot.slice(1)}
+                        ${hero.equipment[slot] ? `<br><small style="color: #ffaa00;">(занято: ${hero.equipment[slot].name})</small>` : ''}
+                    </button>
+                `).join('')}
+            </div>
+            
+            <div style="margin-top: 20px; text-align: center;">
+                <button id="cancelEquipBtn" style="width: auto; padding: 10px 30px; background: #666; color: white; border: none; border-radius: 5px; cursor: pointer;">Отмена</button>
+            </div>
+        `;
+
+        document.querySelectorAll('.equip-slot-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const slot = e.target.dataset.slot;
+
+                if (hero.equip(item, slot)) {
+                    this.showNotification('✅ Предмет экипирован!');
+                    this.showHeroInventory(hero.id);
+                } else {
+                    this.showNotification('❌ Не удалось экипировать предмет', 'error');
+                }
+            });
+        });
+
+        document.getElementById('cancelEquipBtn').addEventListener('click', () => {
+            this.showHeroInventory(hero.id);
+        });
+    }
 
 // Делаем глобальной
 window.UIManager = UIManager;

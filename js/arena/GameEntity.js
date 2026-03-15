@@ -1,81 +1,65 @@
 ﻿// ==============================
 // Базовый класс для всех сущностей на арене
 // ==============================
+// Базовый класс для всех сущностей на арене
 class ArenaEntity {
-    /**
-     * Создаёт новую сущность
-     * @param {number} x - Координата X в мире
-     * @param {number} y - Координата Y в мире
-     * @param {number} radius - Радиус сущности
-     * @param {string} color - Цвет
-     */
-    constructor(x, y, radius, color) {
-        this.worldX = x; // Координаты в мире
-        this.worldY = y;
-        this.radius = radius;
+    constructor(worldX, worldY, radius, color = '#ffffff') {
+        this.worldX = worldX;          // Координаты в мире
+        this.worldY = worldY;
+        this.radius = radius || 20;     // Радиус для коллизий
+        this.vx = 0;                    // Скорость по X
+        this.vy = 0;                    // Скорость по Y
+        this.speed = 0;                  // Базовая скорость
         this.color = color;
-        this.vx = 0;
-        this.vy = 0;
-        this.speed = 0;
         this.isActive = true;
+        
+        // Для анимации
+        this.animationTimer = 0;
+        this.animationFrame = 0;
+        this.hitEffect = 0;              // Эффект получения урона (0-1)
+        this.bobOffset = 0;               // Смещение для подпрыгивания
+        this.bobSpeed = 8;                 // Скорость подпрыгивания
+        
+        // Спрайт менеджер
+        this.spriteManager = window.spriteManager;
     }
-
-    /**
-     * Получить экранные координаты с учётом камеры
-     * @param {number} cameraX - Смещение камеры по X
-     * @returns {number} - Координата на экране
-     */
+    
+    // Получить X на экране с учётом камеры
     getScreenX(cameraX) {
         return this.worldX - cameraX;
     }
-
+    
+    // Получить Y на экране с учётом камеры
     getScreenY(cameraY) {
         return this.worldY - cameraY;
     }
-
-    /**
-     * Обновление сущности
-     * @param {number} deltaTime - Время с прошлого кадра
-     * @param {number} worldWidth - Ширина мира
-     * @param {number} worldHeight - Высота мира
-     */
+    
+    // Обновление позиции и анимации
     update(deltaTime, worldWidth, worldHeight) {
-        if (!this.isActive) return;
-
-        // Обновление позиции на основе скорости
-        this.worldX += this.vx * this.speed * deltaTime;
-        this.worldY += this.vy * this.speed * deltaTime;
-
-        // Границы мира
+        // Двигаем сущность
+        this.worldX += this.vx * this.speed * deltaTime * 60;
+        this.worldY += this.vy * this.speed * deltaTime * 60;
+        
+        // Не даём выйти за границы мира
         this.worldX = Math.max(this.radius, Math.min(worldWidth - this.radius, this.worldX));
         this.worldY = Math.max(this.radius, Math.min(worldHeight - this.radius, this.worldY));
-    }
-
-    /**
-     * Отрисовка сущности
-     * @param {CanvasRenderingContext2D} ctx - Контекст канваса
-     * @param {number} cameraX - Смещение камеры по X
-     * @param {number} cameraY - Смещение камеры по Y
-     */
-    draw(ctx, cameraX, cameraY) {
-        if (!this.isActive) return;
-
-        const screenX = this.getScreenX(cameraX);
-        const screenY = this.getScreenY(cameraY);
-
-        // Рисуем только если видно на экране
-        if (screenX + this.radius < 0 || screenX - this.radius > ctx.canvas.width ||
-            screenY + this.radius < 0 || screenY - this.radius > ctx.canvas.height) {
-            return;
+        
+        // Анимация подпрыгивания при движении
+        if (this.vx !== 0 || this.vy !== 0) {
+            this.animationTimer += deltaTime * this.bobSpeed;
+            this.bobOffset = Math.sin(this.animationTimer) * 3; // Подпрыгивание на 3 пикселя
+        } else {
+            this.bobOffset = 0;
         }
-
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = this.color;
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        
+        // Уменьшаем эффект получения урона
+        if (this.hitEffect > 0) {
+            this.hitEffect -= deltaTime;
+        }
+    }
+    
+    draw(ctx, cameraX, cameraY) {
+        // Будет переопределено в наследниках
     }
 }
 // ==============================
@@ -188,6 +172,55 @@ class ArenaHero extends ArenaEntity {
         // Рисуем оружие
         this.weapons.forEach(w => w.draw(ctx, cameraX, cameraY));
     }
+    constructor(worldX, worldY, heroData) {
+    super(worldX, worldY, 24, '#4aff4a');
+    
+    this.heroData = heroData;
+    this.hp = heroData.currentStats.hp;
+    this.maxHp = heroData.maxHp || heroData.currentStats.hp;
+    this.level = heroData.level;
+    this.exp = heroData.exp;
+    this.speed = heroData.currentStats.speed || 5;
+    
+    this.attack = heroData.currentStats.attack || 10;
+    this.defense = heroData.currentStats.defense || 5;
+    
+    this.expMagnet = 150;                 // Радиус притягивания опыта
+    this.weapons = [];
+    this.skillEffects = [];
+    
+    // Тип героя
+    this.heroType = heroData.type;
+    
+    // Ключ спрайта для героя (warrior, archer, mage, rogue)
+    this.spriteKey = this.heroType;
+
+    // Загружаем оружие
+    this.loadWeapons();
+
+    // Для анимации
+    this.animationFrame = 0;
+    this.lastAttackTime = 0;
+    this.bobSpeed = 10; // Герой подпрыгивает быстрее
+
+    // Специальные способности для разных классов
+    this.traps = [];                     // Ловушки для разбойника
+    this.trapCooldown = 0;
+    this.trapInterval = 5;                // Ловушка каждые 5 секунд
+
+    this.magicBeam = null;                // Магический луч для мага
+    this.magicCooldown = 0;
+    this.magicInterval = 8;                // Магия каждые 8 секунд
+
+    // Расходники в бою (зелья)
+    this.battleConsumables = [];
+    this.loadConsumables();
+
+    // Убеждаемся, что у heroData есть массив для навыков
+    if (!this.heroData.learnedSkills) {
+        this.heroData.learnedSkills = [];
+    }
+}
 
     /**
      * Добавление опыта
